@@ -243,6 +243,11 @@ class AIPlayer(Player):
         moveArray = listAllMovementPaths(currentState, ant.coords, UNIT_STATS[ant.type][MOVEMENT])
         shortestDist = 100 #impossibly large value
         bestCoords = (0,0) #default
+        #check if the desired location is availible for the worker to move to
+        if ant.type == WORKER and approxDist(ant.coords, destCoords) < 2 and getAntAt(currentState, destCoords) != None:
+            dest = random.choice(listReachableAdjacent(currentState, ant.coords, UNIT_STATS[ant.type][MOVEMENT]))
+            return createPathToward(currentState, ant.coords, dest, UNIT_STATS[ant.type][MOVEMENT])
+
         for movelists in moveArray:
             for move in movelists:
                 dist = stepsToReach(currentState, move, destCoords)
