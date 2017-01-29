@@ -119,7 +119,6 @@ class AIPlayer(Player):
             for food in getConstrList(currentState, None, (FOOD,)): 
                 if food.coords[1] < 4:
                     self.batFood.append(food)
-            print self.batFood
         if(self.batCave == None):
             self.batCave = getConstrList(currentState, me, (ANTHILL,))
         if(self.batTunnel == None):
@@ -171,13 +170,13 @@ class AIPlayer(Player):
         if(myQueen.hasMoved == False):
             queenPath = self.queenMove(currentState, myQueen, self.reservedCoordinates)
             return Move(MOVE_ANT, queenPath, None)
-            
-         #if we dont have a soldier, try to build one if there is space and enough resouces to do so
-        if (getAntList(currentState, me, (SOLDIER,))):
+
+        #if we dont have a soldier, try to build one if there is space and enough resouces to do so
+        if (len(getAntList(currentState, me, (SOLDIER,))) < 1):
             if(getAntAt(currentState, self.batCave[0].coords) == None
                 and inventory.foodCount >= 3):
                     return Move(BUILD, [self.batCave[0].coords,], SOLDIER)
-        #if we have at least one soldier, have/them find and attack the enemy
+        #if we have at least one soldier, have it/them find and attack the enemy
         else:
             battalion = getAntList(currentState, me, (SOLDIER,))
             for soldier in battalion:
