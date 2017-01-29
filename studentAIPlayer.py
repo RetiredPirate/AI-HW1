@@ -33,7 +33,6 @@ class AIPlayer(Player):
         self.batFood = None
         self.batTunnel = None
         self.batCave = None
-        self.workerList = None
         self.reservedCoordinates = []
 
     #getPlacement
@@ -62,10 +61,9 @@ class AIPlayer(Player):
         self.batFood = None
         self.batTunnel = None
         self.batCave = None
-        self.workerList = None
-        self.reservedCoordinates = []
         self.lastCoords = [] #Keeps last coords of workers to stop a stalemate
         self.newTurn = False
+
         if currentState.phase == SETUP_PHASE_1:
             return[(2,1), (7,1), (0,3), (1,3), (2,3), (3,3), (4,3),( 6,3), (7,3), (8,3), (9,3)];    #grass placement 
         #Randomly places enemy food, *stolen from Dr. Nuxoll's Simple Food Gatherer AI*
@@ -112,95 +110,114 @@ class AIPlayer(Player):
     def getMove(self, currentState):
         inventory = getCurrPlayerInventory(currentState)
         me = currentState.whoseTurn
-      
-        #if we dont know where our food is yet, find the two locations
-        if(self.batFood == None): #get only the two foods on our side
-            self.batFood = []
-            for food in getConstrList(currentState, None, (FOOD,)): 
-                if food.coords[1] < 4:
-                    self.batFood.append(food)
-        if(self.batCave == None):
-            self.batCave = getConstrList(currentState, me, (ANTHILL,))
-        if(self.batTunnel == None):
-            self.batTunnel = getConstrList(currentState, me, (TUNNEL,))
-        if not(self.reservedCoordinates): #DO NOT ALTER THE ORDER OF APPENDING
-            self.reservedCoordinates.append(self.batCave[0].coords)
-            self.reservedCoordinates.append(self.batTunnel[0].coords)
-            self.reservedCoordinates.append(self.batFood[0].coords)
-            self.reservedCoordinates.append(self.batFood[1].coords)
+        self.initConstAndFood(currentState, me)      
 
         #Prevent getting stuck
-
         if self.newTurn:
             currCoords = []
             for ant in getAntList(currentState, me, (WORKER,)):
-                currCoords.append(ant.coords)
+                    currCoords.append(ant.coords)
             if currCoords == self.lastCoords:
                 return Move(MOVE_ANT, random.choice(listAllMovementPaths(currentState, currCoords[0], UNIT_STATS[WORKER][MOVEMENT])), None)
             self.lastCoords = currCoords
             self.newTurn = False
         
+        #If we dont have a soldier, try to build one
+        if (len(getAntList(currentState, me, (SOLDIER,))) < 1):
+            if(getAntAt(currentState, self.batCave[0].coords) == None and inventory.foodCount >= 3):
+                    return Move(BUILD, [self.batCave[0].coords,], SOLDIER)
+
+        #Try to build an extra soldier ant if the enemy is in the neutral zone, or in our territory
+        if (len(getAntList(currentState, me, (SOLDIER,))) < 2):  
+            for ant in getAntList(currentState, not me, (QUEEN, WORKER, DRONE, SOLDIER, R_SOLDIER)):
+                if(ant.coords[1] < 6 and inventory.foodCount >= 3 and getAntAt(currentState, self.batCave[0].coords) == None):
+                    return Move(BUILD, [self.batCave[0].coords,], SOLDIER) 
 
         #Build New Worker(s)
         if(len(getAntList(currentState, me, (WORKER,))) < 2):
             if(inventory.foodCount > 0 and getAntAt(currentState, self.batCave[0].coords) == None):
                 return Move(BUILD, [self.batCave[0].coords,], WORKER)
-       	    
-        #move workers
+
+        #Moves the worker ants to/from food sources and drop points
         workerParty = getAntList(currentState, me, (WORKER,))
         for worker in workerParty:    
-            if not worker.hasMoved:
-                workerIndex = workerParty.index(worker)
-                if (worker.carrying):
-                    if(workerIndex == 0):
-                        destination = self.batTunnel[0].coords                    
-                    else:
-                        destination = self.batCave[0].coords
-                    path = self.findBestPath(currentState, worker, destination)
-                else:
-                    closestFood = stepsToReach(currentState, self.batFood[0].coords, worker.coords)
-                    if(closestFood > stepsToReach(currentState, self.batFood[1].coords, worker.coords)):
-                        closestFood = 1
-                    else:
-                        closestFood = 0
-                    path = self.findBestPath(currentState, worker, self.batFood[closestFood].coords)
-                return Move(MOVE_ANT, path, None)
+            if not worker.hasMoved: 
+                return Move(MOVE_ANT, self.getWorkerPath(currentState, worker, workerParty.index(worker)), None)
 
+        #Moves the queen into the back and out of the way
         myQueen = getAntList(currentState, me, (QUEEN,))[0]
-        if(myQueen.hasMoved == False):
-            queenPath = self.queenMove(currentState, myQueen, self.reservedCoordinates)
-            return Move(MOVE_ANT, queenPath, None)
+        if not myQueen.hasMoved:
+            return Move(MOVE_ANT, self.queenPath(currentState, myQueen), None)
 
-        #if we dont have a soldier, try to build one if there is space and enough resouces to do so
-        if (len(getAntList(currentState, me, (SOLDIER,))) < 1):
-            if(getAntAt(currentState, self.batCave[0].coords) == None
-                and inventory.foodCount >= 3):
-                    return Move(BUILD, [self.batCave[0].coords,], SOLDIER)
-        #if we have at least one soldier, have it/them find and attack the enemy
-        else:
-            battalion = getAntList(currentState, me, (SOLDIER,))
-            for soldier in battalion:
-                if(soldier.hasMoved == False):
-                    targetCoords = self.findNearestEnemy(currentState, soldier)
-                    path = self.findBestPath(currentState, soldier, targetCoords)
-                    return Move(MOVE_ANT, path, None)
+        #if we have at least one soldier, have them move towards the enemy
+        if(len(getAntList(currentState, me, (SOLDIER,))) >= 1):
+            for soldier in getAntList(currentState, me, (SOLDIER,)):
+                if not soldier.hasMoved:
+                    return Move(MOVE_ANT, self.findBestPath(currentState, soldier, self.findNearestEnemy(currentState, soldier)), None)
 
-        #Try to build an extra soldier ant if the enemy is in the neutral zone, or in our territory
-        if (len(getAntList(currentState, me, (SOLDIER,))) < 2):  
-            for ant in getAntList(currentState, not me, (QUEEN, WORKER, DRONE, SOLDIER, R_SOLDIER)):
-                if(ant.coords[1] < 6 and inventory.foodCount >= 3 
-                    and getAntAt(currentState, self.batCave[0].coords) == None):
-                    print(ant.coords[1])
-                    return Move(BUILD, [self.batCave[0].coords,], SOLDIER) 
-
-
-        #default is to do nothing, which is a valid move
+        #If we are out of moves, end our turn
         self.newTurn = True
         return Move(END, None, None)
+    ####### END OF GET MOVE #######
+
+    ##
+    #initConstAndFood
+    #
+    #Initilizes various constructs and food locations
+    #
+    #Parameters:
+    #       CurrentState - current game state
+    #       me - the current player ID
+    #
+    #Return: None
+    def initConstAndFood(self, currentState, me):
+        #if we dont know where our food is yet, find the two locations
+        if(self.batFood == None): 
+            self.batFood = []
+            for food in getConstrList(currentState, None, (FOOD,)): 
+                if food.coords[1] < 4: #get only the two foods on our side
+                    self.batFood.append(food)
+        if(self.batCave == None):
+            self.batCave = getConstrList(currentState, me, (ANTHILL,))
+        if(self.batTunnel == None):
+            self.batTunnel = getConstrList(currentState, me, (TUNNEL,))    
+    ##
+    #getWorkerPath
+    #
+    #determines the best path for the worker between the closest food and 
+    #the workers assigned drop point
+    #
+    #Parameters
+    #   CurrentState - current game state
+    #   worker - a reference to a worker ant
+    #   workerIndex - the index of the worker ant in the worker ant list
+    #
+    #Return: A path to be used by a Move command
+    # 
+    def getWorkerPath(self, currentState, worker, workerIndex):
+        if worker.carrying:
+            if(workerIndex == 0):
+                destination = self.batTunnel[0].coords                    
+            else:
+                destination = self.batCave[0].coords
+            return self.findBestPath(currentState, worker, destination)
+        else:
+            closestFood = stepsToReach(currentState, self.batFood[0].coords, worker.coords)
+            if(closestFood > stepsToReach(currentState, self.batFood[1].coords, worker.coords)):
+                closestFood = 1
+            else:
+                closestFood = 0
+            return self.findBestPath(currentState, worker, self.batFood[closestFood].coords)
+
     ##
     #findNearestEnemy
-    #Gets the coordinates of the nearest enemy of the desired type(s)
-    #Returns the coordinates of the nearest enemy
+    #Gets the coordinates of the nearest enemy
+    #
+    #Parameters
+    #   CurrentState - current game state
+    #   ant - reference to the the ant we wish to move
+    #
+    #Return: the coordinates of the nearest enemy
     #
     def findNearestEnemy(self, currentState, ant):
         dist = 100.0
@@ -212,8 +229,15 @@ class AIPlayer(Player):
 
     ##
     #findBestPath
+    #
     #Finds the best path to the destination
-    #Returns a path
+    #
+    #Parameters
+    #   CurrentState - current game state
+    #   ant - reference to the the ant we wish to move
+    #   destCoords - location we want to move to
+    #
+    #Return: A path to be used by a Move command
     #
     def findBestPath(self, currentState, ant, destCoords):
         moveArray = listAllMovementPaths(currentState, ant.coords, UNIT_STATS[ant.type][MOVEMENT])
@@ -227,19 +251,25 @@ class AIPlayer(Player):
                     bestCoords = move
         return createPathToward(currentState, ant.coords, bestCoords, UNIT_STATS[ant.type][MOVEMENT])
     ##
-    #queenMove
-    #returns the path for queens next move
-    #This moves the queen off the cave, and also keeps her away 
-    # from the tunnels and the food resources so workers can move faster
+    #queenPath
     #
-    def queenMove(self, currentState, myQueen, reservedCoordinates):
+    #This moves the queen off the cave, and also keeps her away from the
+    #tunnels and the food resources so workers can be more efficient
+    #
+    #Parameters
+    #   CurrentState - current game state
+    #   myQueen - reference to the queen ant
+    #
+    #Return: A path to be used by a Move command
+    #
+    def queenPath(self, currentState, myQueen):
         queenCoordinates = myQueen.coords
-        while(stepsToReach(currentState, queenCoordinates, self.reservedCoordinates[0]) <= 2
-            or stepsToReach(currentState, queenCoordinates, self.reservedCoordinates[1]) <= 2
-            or stepsToReach(currentState, queenCoordinates, self.reservedCoordinates[2]) <= 2
-            or stepsToReach(currentState, queenCoordinates, self.reservedCoordinates[3]) <= 2):
+        while(stepsToReach(currentState, queenCoordinates, self.batFood[0].coords) <= 2
+            or stepsToReach(currentState, queenCoordinates, self.batFood[1].coords) <= 2
+            or stepsToReach(currentState, queenCoordinates, self.batCave[0].coords) <= 2
+            or stepsToReach(currentState, queenCoordinates, self.batTunnel[0].coords) <= 2):
             queenCoordinates = (random.randint(0,9), random.randint(0,1))
-        return createPathToward(currentState, myQueen.coords, queenCoordinates, UNIT_STATS[QUEEN][MOVEMENT])
+        return self.findBestPath(currentState, myQueen, queenCoordinates)
 
     ##
     #getAttack
