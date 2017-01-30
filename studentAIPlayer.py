@@ -113,14 +113,15 @@ class AIPlayer(Player):
         self.initConstAndFood(currentState, me)      
 
         #Prevent getting stuck
-        if self.newTurn:
-            currCoords = []
-            for ant in getAntList(currentState, me, (WORKER,)):
-                    currCoords.append(ant.coords)
-            if currCoords == self.lastCoords:
-                return Move(MOVE_ANT, random.choice(listAllMovementPaths(currentState, currCoords[0], UNIT_STATS[WORKER][MOVEMENT])), None)
-            self.lastCoords = currCoords
-            self.newTurn = False
+        # if self.newTurn:
+        #     currCoords = []
+        #     for ant in getAntList(currentState, me, (WORKER,)):
+        #             currCoords.append(ant.coords)
+        #     if currCoords == self.lastCoords:
+        #         return Move(MOVE_ANT, random.choice(listAllMovementPaths(currentState, currCoords[0],
+        #                 UNIT_STATS[WORKER][MOVEMENT])), None)
+        #     self.lastCoords = currCoords
+        #     self.newTurn = False
         
         #If we dont have a soldier, try to build one
         if (len(getAntList(currentState, me, (SOLDIER,))) < 1):
@@ -130,7 +131,8 @@ class AIPlayer(Player):
         #Try to build an extra soldier ant if the enemy is in the neutral zone, or in our territory
         if (len(getAntList(currentState, me, (SOLDIER,))) < 2):  
             for ant in getAntList(currentState, not me, (QUEEN, WORKER, DRONE, SOLDIER, R_SOLDIER)):
-                if(ant.coords[1] < 6 and inventory.foodCount >= 3 and getAntAt(currentState, self.batCave[0].coords) == None):
+                if(ant.coords[1] < 6 and inventory.foodCount >= 3 and 
+                        getAntAt(currentState, self.batCave[0].coords) == None):
                     return Move(BUILD, [self.batCave[0].coords,], SOLDIER) 
 
         #Build New Worker(s)
@@ -153,7 +155,8 @@ class AIPlayer(Player):
         if(len(getAntList(currentState, me, (SOLDIER,))) >= 1):
             for soldier in getAntList(currentState, me, (SOLDIER,)):
                 if not soldier.hasMoved:
-                    return Move(MOVE_ANT, self.findBestPath(currentState, soldier, self.findNearestEnemy(currentState, soldier)), None)
+                    return Move(MOVE_ANT, self.findBestPath(currentState, soldier, 
+                            self.findNearestEnemy(currentState, soldier)), None)
 
         #If we are out of moves, end our turn
         self.newTurn = True
