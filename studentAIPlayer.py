@@ -33,7 +33,6 @@ class AIPlayer(Player):
         self.batFood = None
         self.batTunnel = None
         self.batCave = None
-        self.reservedCoordinates = []
 
     #getPlacement
     #
@@ -61,8 +60,6 @@ class AIPlayer(Player):
         self.batFood = None
         self.batTunnel = None
         self.batCave = None
-        self.lastCoords = [] #Keeps last coords of workers to stop a stalemate
-        self.newTurn = False
 
         if currentState.phase == SETUP_PHASE_1:
             return[(2,1), (7,1), (0,3), (1,3), (2,3), (3,3), (4,3),( 6,3), (7,3), (8,3), (9,3)];    #grass placement 
@@ -110,18 +107,7 @@ class AIPlayer(Player):
     def getMove(self, currentState):
         inventory = getCurrPlayerInventory(currentState)
         me = currentState.whoseTurn
-        self.initConstAndFood(currentState, me)      
-
-        #Prevent getting stuck
-        # if self.newTurn:
-        #     currCoords = []
-        #     for ant in getAntList(currentState, me, (WORKER,)):
-        #             currCoords.append(ant.coords)
-        #     if currCoords == self.lastCoords:
-        #         return Move(MOVE_ANT, random.choice(listAllMovementPaths(currentState, currCoords[0],
-        #                 UNIT_STATS[WORKER][MOVEMENT])), None)
-        #     self.lastCoords = currCoords
-        #     self.newTurn = False
+        self.initConstAndFood(currentState, me)     
         
         #If we dont have a soldier, try to build one
         if (len(getAntList(currentState, me, (SOLDIER,))) < 1):
@@ -159,7 +145,6 @@ class AIPlayer(Player):
                             self.findNearestEnemy(currentState, soldier)), None)
 
         #If we are out of moves, end our turn
-        self.newTurn = True
         return Move(END, None, None)
     ####### END OF GET MOVE #######
 
